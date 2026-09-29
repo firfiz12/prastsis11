@@ -19,6 +19,14 @@ h1{margin:0 0 8px;font-size:30px} .sub{opacity:.9} .bar{display:flex;gap:10px;fl
 .feedback{margin-top:18px;padding:14px;border-radius:12px;display:none;font-weight:700} .good{background:#eaf7ef;color:#146c43} .bad{background:#fdecea;color:#a93226}
 .result{display:none;text-align:center} .score{font-size:58px;font-weight:800;color:var(--primary);margin:10px} .review{text-align:right;margin-top:24px} .review-item{border-bottom:1px solid var(--line);padding:14px 0} .small{color:var(--muted);font-size:14px}
 .start{text-align:center} .start p{font-size:18px;line-height:1.8;color:var(--muted)} .field{padding:12px;border:1px solid var(--line);border-radius:10px;font-size:17px;width:min(100%,400px);text-align:right}
+.stats{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:16px 0 4px}
+.stat{background:#f3faf6;border:1px solid var(--line);border-radius:14px;padding:10px 18px;min-width:104px}
+.stat b{display:block;font-size:26px;font-weight:800;color:var(--primary);line-height:1.5}
+.stat span{font-size:15px;color:var(--muted)}
+.grade{font-size:21px;font-weight:700;margin:6px 0 18px;color:var(--primary2)}
+.box-title{font-size:22px;font-weight:700;margin:0 0 6px}
+.review h3{font-size:20px;margin:0 0 8px}
+.review-item.wrong{background:#fdf3f1;border:1px solid #f2cdc7;border-radius:12px;padding:12px 14px;margin:10px 0}
 @media(max-width:600px){h1{font-size:24px} .q{font-size:20px} .option{font-size:17px} .card{padding:18px}}
 </style>
 </head>
@@ -34,7 +42,7 @@ h1{margin:0 0 8px;font-size:30px} .sub{opacity:.9} .bar{display:flex;gap:10px;fl
 <h2>بِسْمِ اللَّهِ</h2>
 <p>اقْرَأِ السُّؤَالَ بِتَأَنٍّ، ثُمَّ اخْتَرِ الْإِجَابَةَ الْأَنْسَبَ. لَنْ تُظْهَرَ الْإِجَابَاتُ الصَّحِيحَةُ إِلَّا بَعْدَ إِنْهَاءِ الْكُوَيْزِ. عَدَدُ الْأَسْئِلَةِ: ٦٠ سُؤَالًا.</p>
 <input id="name" class="field" placeholder="اِسْمُ الطَّالِ (اخْتِيَارِيٌّ)">
-<br><br><button onclick="startQuiz()">بِدَايَةُ الْكُوَيْزِ</button>
+<br><br><button onclick="startQuiz()">بِدَايَةُ الِاخْتِبَارِ</button>
 </div>
 
 <div id="quiz" class="card" style="display:none">
@@ -46,11 +54,15 @@ h1{margin:0 0 8px;font-size:30px} .sub{opacity:.9} .bar{display:flex;gap:10px;fl
 </div>
 
 <div id="result" class="card result">
-<h2>نَتِيجَةُ الْكُوَيْزِ</h2>
+<h2>نَتِيجَةُ الِاخْتِبَارِ</h2>
 <div id="score" class="score"></div>
 <div id="resultText"></div>
-<button onclick="location.reload()">إِعَادَةُ الْكُوَيْزِ</button>
-<div id="review" class="review"></div>
+<div id="stats" class="stats"></div>
+<div id="grade" class="grade"></div>
+<button class="secondary" id="toggleBtn" onclick="toggleReview()" style="display:none;margin:0 6px">إظهارُ كُلِّ الإجابات</button>
+<button onclick="location.reload()">إِعَادَةُ الِاخْتِبَارِ</button>
+<div id="wrongBox" class="review"></div>
+<div id="review" class="review" style="display:none"></div>
 </div>
 </div>
 
@@ -84,20 +96,40 @@ function nextQ(){
  if(i<questions.length-1){i++;render();}else finish();
 }
 function prevQ(){if(i>0){i--;render();}}
+var showAll=false;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function predikat(p){if(p>=90)return 'مُمْتَاز';if(p>=80)return 'جَيِّدٌ جِدًّا';if(p>=70)return 'جَيِّد';if(p>=60)return 'مَقْبُول';return 'يَحْتَاجُ إِلَى مُرَاجَعَة';}
+function itemHTML(x,j){
+ const a=answers[j],blank=(a===null||a===undefined),ok=!blank&&a===x.correct;
+ return '<div class="review-item'+(ok?'':' wrong')+'"><b>'+(j+1)+'.</b> '+esc(x.q)+'<br><span class="'+(ok?'good':'bad')+'">'+(ok?'✓ صَحِيح':'✗ خَاطِئ')+' — إِجَابَتُكَ: '+esc(blank?'لَمْ تُجِبْ':x.a[a])+(ok?'':' — الصَّحِيحَةُ: '+esc(x.a[x.correct]))+'</span></div>';
+}
+function toggleReview(){
+ showAll=!showAll;
+ document.getElementById('review').style.display=showAll?'block':'none';
+ document.getElementById('toggleBtn').textContent=showAll?'إخفاءُ كُلِّ الإجابات':'إظهارُ كُلِّ الإجابات';
+}
 function finish(){
- let score=0; questions.forEach((x,j)=>{if(answers[j]===x.correct)score++;});
+ let benar=0,salah=0,kosong=0;
+ questions.forEach(function(x,j){const a=answers[j];if(a===null||a===undefined)kosong++;else if(a===x.correct)benar++;else salah++;});
  document.getElementById('quiz').style.display='none';
  document.getElementById('result').style.display='block';
- const pct=Math.round(score/questions.length*100);
- document.getElementById('score').textContent=`${score} / ${questions.length}`;
+ const total=questions.length,pct=Math.round(benar/total*100);
+ document.getElementById('score').textContent=benar+' / '+total;
  const name=document.getElementById('name').value.trim();
- document.getElementById('resultText').innerHTML=`${name?`<strong>${name}</strong><br>`:''}النِّسْبَةُ: <strong>${pct}%</strong>`;
- let r='<h3>مُرَاجَعَةُ الْإِجَابَاتِ</h3>';
- questions.forEach((x,j)=>{
-   const ok=answers[j]===x.correct;
-   r+=`<div class="review-item"><b>${j+1}.</b> ${x.q}<br><span class="${ok?'good':'bad'}">${ok?'✓ صَحِيح':'✗ خَاطِئ'} — إِجَابَتُكَ: ${x.a[answers[j]]}${ok?'':' — الصَّحِيحَةُ: '+x.a[x.correct]}</span></div>`;
- });
+ document.getElementById('resultText').innerHTML=(name?'<strong>'+esc(name)+'</strong><br>':'')+'النِّسْبَةُ: <strong>'+pct+'%</strong>';
+ document.getElementById('stats').innerHTML='<div class="stat"><b>'+benar+'</b><span>إِجَابَةٌ صَحِيحَةٌ</span></div><div class="stat"><b>'+salah+'</b><span>إِجَابَةٌ خَاطِئَةٌ</span></div><div class="stat"><b>'+kosong+'</b><span>لَمْ تُجَبْ</span></div>';
+ document.getElementById('grade').textContent='التَّقْدِيرُ: '+predikat(pct);
+ let w='<h3 class="box-title">الْأَخْطَاءُ وَالصَّحِيحَةُ ('+salah+')</h3>';
+ if(salah===0){w+='<div class="review-item"><span class="good">مَا شَاءَ اللَّهُ، لَا تَخْطِئَاتٍ فِي هَذَا الِاخْتِبَارِ.</span></div>';}
+ else{questions.forEach(function(x,j){const a=answers[j];if(a!==null&&a!==undefined&&a!==x.correct)w+=itemHTML(x,j);});}
+ document.getElementById('wrongBox').innerHTML=w;
+ let r='<h3>مُرَاجَعَةُ كُلِّ الإجابات</h3>';
+ questions.forEach(function(x,j){r+=itemHTML(x,j);});
  document.getElementById('review').innerHTML=r;
+ document.getElementById('toggleBtn').style.display='inline-block';
+ document.getElementById('toggleBtn').textContent='إظهارُ كُلِّ الإجابات';
+ showAll=false;
+ document.getElementById('review').style.display='none';
  window.scrollTo({top:0,behavior:'smooth'});
 }
 </script>
